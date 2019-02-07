@@ -54,5 +54,4 @@ class DataLoader(object):
         return x_test
 
     def load_train_data(self, shuffle=True, batch_size=2, num_workers=4):
-        return Data.DataLoader(self._train_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
-
+        return Data.DataLoader(self._train_dataset, batch_size=batch_size, shuffle=shuffle)
