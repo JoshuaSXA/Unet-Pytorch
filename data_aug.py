@@ -1,6 +1,8 @@
 from PIL import Image
 import random
 import math
+import torch
+import types
 
 # Random rotation.
 def random_rotate(img, mask, degrees):
@@ -51,3 +53,24 @@ def random_vertical_flip(img, mask):
         img = img.transpose(Image.FLIP_TOP_BOTTOM)
         mask = mask.transpose(Image.FLIP_TOP_BOTTOM)
     return img, mask
+
+def image_resize(img, mask, size=(512, 512)):
+    return img.resize(size), mask.resize(size)
+
+def image_to_tensor(img, mask):
+    img = img / 255.0
+    mask = mask / 255.0
+    img = torch.from_numpy(img).permute(2, 0, 1)
+    mask = torch.from_numpy(mask).unsqueeze(0)
+    return img, mask
+
+
+
+#
+# def compose(image, mask, trans_opt=[]):
+#     for i in range(len(trans_opt)):
+#         trans_func = trans_opt[i]
+#         if not isinstance(trans_func, types.FunctionType):
+#             assert "Invalid function type."
+#             return image, mask
+#         image, mask = trans_func(image, mask)

@@ -2,85 +2,115 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# Double conv module which consists of two conv layer with each followed by a BN nd ReLU
-class DoubleConv(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(DoubleConv, self).__init__()
-        self.features = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU()
+
+class double_conv(nn.Module):
+    '''(conv => BN => ReLU) * 2'''
+
+    def __init__(self, in_ch, out_ch):
+        super(double_conv, self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, 3, padding=1),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_ch, out_ch, 3, padding=1),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True)
         )
 
-    def forward(self, inputs):
-        return self.features(inputs)
+    def forward(self, x):
+        x = self.conv(x)
+        return x
 
 
-# Left downstream part for unet
-class DownStream(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(DownStream, self).__init__()
-        self.features = nn.Sequential(
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            DoubleConv(in_channels, out_channels)
+class inconv(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super(inconv, self).__init__()
+        self.conv = double_conv(in_ch, out_ch)
+
+    def forward(self, x):
+        x = self.conv(x)
+        return x
+
+
+class down(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super(down, self).__init__()
+        self.mpconv = nn.Sequential(
+            nn.MaxPool2d(2),
+            double_conv(in_ch, out_ch)
         )
 
-    def forward(self, inputs):
-        return self.features(inputs)
+    def forward(self, x):
+        x = self.mpconv(x)
+        return x
 
 
-# Right upstream part for unet
-class UpStream(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(UpStream, self).__init__()
-        self.up_conv = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2)
-        self.double_cov = DoubleConv(in_channels, out_channels)
+class up(nn.Module):
+    def __init__(self, in_ch, out_ch, bilinear=True):
+        super(up, self).__init__()
 
-    def forward(self, inputs, down_features):
-        # the margin_x and margin_y is even
-        upconv_out = self.up_conv(inputs)
-        padding_x = down_features.size()[3] - upconv_out.size()[3]
-        padding_y = down_features.size()[2] - upconv_out.size()[2]
-        upconv_out = F.pad(upconv_out, (padding_x // 2, padding_x - padding_x // 2, padding_y // 2, padding_y - padding_y // 2))
-        x = torch.cat([down_features, upconv_out], dim=1)
-        out = self.double_cov(x)
-        return out
+        #  would be a nice idea if the upsampling could be learned too,
+        #  but my machine do not have enough memory to handle all those weights
+        if bilinear:
+            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        else:
+            self.up = nn.ConvTranspose2d(in_ch // 2, in_ch // 2, 2, stride=2)
+
+        self.conv = double_conv(in_ch, out_ch)
+
+    def forward(self, x1, x2):
+        x1 = self.up(x1)
+
+        # input is CHW
+        diffY = x2.size()[2] - x1.size()[2]
+        diffX = x2.size()[3] - x1.size()[3]
+
+        x1 = F.pad(x1, (diffX // 2, diffX - diffX // 2,
+                        diffY // 2, diffY - diffY // 2))
+
+        # for padding issues, see
+        # https://github.com/HaiyongJiang/U-Net-Pytorch-Unstructured-Buggy/commit/0e854509c2cea854e247a9c615f175f76fbb2e3a
+        # https://github.com/xiaopeng-liao/Pytorch-UNet/commit/8ebac70e633bac59fc22bb5195e513d5832fb3bd
+
+        x = torch.cat([x2, x1], dim=1)
+        x = self.conv(x)
+        return x
 
 
-# Unet
+class outconv(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super(outconv, self).__init__()
+        self.conv = nn.Conv2d(in_ch, out_ch, 1)
+
+    def forward(self, x):
+        x = self.conv(x)
+        return x
+
+
+
 class UNet(nn.Module):
-    def __init__(self, channels = 1, classes = 1):
+    def __init__(self, n_channels, n_classes):
         super(UNet, self).__init__()
-        self.d_conv = DoubleConv(channels, 64)
-        self.down1 = DownStream(64, 128)
-        self.down2 = DownStream(128, 256)
-        self.down3 = DownStream(256, 512)
-        self.down4 = DownStream(512, 1024)
-        self.up1 = UpStream(1024, 512)
-        self.up2 = UpStream(512, 256)
-        self.up3 = UpStream(256, 128)
-        self.up4 = UpStream(128, 64)
-        self.conv = nn.Conv2d(64, classes, kernel_size=1)
+        self.inc = inconv(n_channels, 64)
+        self.down1 = down(64, 128)
+        self.down2 = down(128, 256)
+        self.down3 = down(256, 512)
+        self.down4 = down(512, 512)
+        self.up1 = up(1024, 256)
+        self.up2 = up(512, 128)
+        self.up3 = up(256, 64)
+        self.up4 = up(128, 64)
+        self.outc = outconv(64, n_classes)
 
-    def forward(self, inputs):
-        out1 = self.d_conv(inputs)
-        out2 = self.down1(out1)
-        out3 = self.down2(out2)
-        out4 = self.down3(out3)
-        out5 = self.down4(out4)
-        out = self.up1(out5, out4)
-        out = self.up2(out, out3)
-        out = self.up3(out, out2)
-        out = self.up4(out, out1)
-        out = F.sigmoid(self.conv(out))
-        return out
-
-
-
-
-
-
-
+    def forward(self, x):
+        x1 = self.inc(x)
+        x2 = self.down1(x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x5 = self.down4(x4)
+        x = self.up1(x5, x4)
+        x = self.up2(x, x3)
+        x = self.up3(x, x2)
+        x = self.up4(x, x1)
+        x = self.outc(x)
+        return F.sigmoid(x)
