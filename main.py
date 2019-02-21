@@ -50,24 +50,22 @@ def train_net(net, epochs=10, batch_size=4,lr=0.1, val_percent=0.05, save_cp=Tru
 
     # train
     for epoch in range(epochs):
-        # epoch_train_loss = 0.0
-        # net.train()
-        # for (img, mask) in train_loader:
-        #     inputs, targets = img.to(device), mask.to(device)
-        #     optimizer.zero_grad()
-        #     outputs = net(inputs)
-        #     loss = criterion(outputs, targets)
-        #     loss.backward()
-        #     optimizer.step()
-        #     epoch_train_loss += loss.item()
+        epoch_train_loss = 0.0
+        net.train()
+        for (img, mask) in train_loader:
+            inputs, targets = img.to(device), mask.to(device)
+            optimizer.zero_grad()
+            outputs = net(inputs)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            optimizer.step()
+            epoch_train_loss += loss.item()
         val_dice_loss = eval_net(net, val_loader)
-        print(val_dice_loss)
-        # print('Epoch %d, total train loss is %.5f, test dice loss is %.5f' % ((epoch + 1),epoch_train_loss, val_dice_loss) )
-        #
-        # if save_cp:
-        #     torch.save(net.state_dict(),
-        #                dir_checkpoint + 'CP{}.pth'.format(epoch + 1))
-        #     print('Checkpoint {} saved !'.format(epoch + 1))
+        print('Epoch %d, total train loss is %.5f, test dice loss is %.5f' % ((epoch + 1),epoch_train_loss, val_dice_loss) )
+        if save_cp:
+            torch.save(net.state_dict(),
+                       dir_checkpoint + 'CP{}.pth'.format(epoch + 1))
+            print('Checkpoint {} saved !'.format(epoch + 1))
 
 
 if __name__ == '__main__':
