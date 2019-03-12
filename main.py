@@ -38,7 +38,7 @@ def train_net(net, epochs=10, batch_size=4,lr=0.1, val_percent=0.05, save_cp=Tru
     net.apply(utils.weights_initializer)
 
     # dataloader
-    dataloader = ISICDataLoader(image_path="./data/ISIC2018/image/", mask_path="./data/ISIC2018/mask/")
+    dataloader = MyDataLoader(image_path="./data/ISIC2018/image/", mask_path="./data/ISIC2018/mask/")
     train_loader = dataloader.get_train_dataloader(batch_size=4, shuffle=True, num_works=0)
     val_loader = dataloader.get_val_dataloader(batch_size=4, num_works=0)
 

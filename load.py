@@ -34,7 +34,7 @@ class CustomDataset(Data.Dataset):
         return (img, mask)
 
 
-class ISICDataLoader(object):
+class MyDataLoader(object):
     def __init__(self, image_path, mask_path, split_ratio=0.05,transforms=None):
         img_frames = sorted(glob(os.path.join(image_path, "*")))
         mask_frames = sorted(glob(os.path.join(mask_path, "*")))
@@ -58,10 +58,3 @@ class ISICDataLoader(object):
     def get_val_dataloader(self, batch_size=4, num_works=4):
         return Data.DataLoader(self._val_dataset, batch_size=batch_size, num_workers=num_works)
 
-
-
-# dataloader = ISICDataLoader(image_path="./data/ISIC2018/image/", mask_path="./data/ISIC2018/mask/")
-# val_loader = dataloader.get_val_dataloader(num_works=0)
-# for (img, mask) in val_loader:
-#     print(img.shape, mask.shape)
-#     break
